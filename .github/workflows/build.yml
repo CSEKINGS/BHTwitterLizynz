@@ -71,12 +71,12 @@ jobs:
 
       - name: Setup Theos
         run: |
-          mkdir -p theos/sdks
-          if [ ! -d "theos/.git" ]; then
+          if [ ! -d "theos" ]; then
             git clone --depth=1 https://github.com/theos/theos.git theos
           else
             echo "Theos already exists, skipping clone."
           fi
+          mkdir -p theos/sdks
 
       - name: Download iOS SDK
         run: |
