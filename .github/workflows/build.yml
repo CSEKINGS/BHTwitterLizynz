@@ -55,7 +55,7 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout Main Repository
+      - name: Checkout Main
         uses: actions/checkout@v4
         with:
           path: main
@@ -66,35 +66,21 @@ jobs:
         run: brew install make dpkg ldid
 
       - name: Add GNU Make to PATH
-        run: echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
+        run: |
+          echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
 
-      - name: Download Theos
-        uses: actions/checkout@v4
-        with:
-          repository: theos/theos
-          ref: master
-          path: theos
-          submodules: recursive
-
-      - name: Install Cyan
-        if: inputs.deploy_format == 'sideloaded' || inputs.deploy_format == 'trollstore'
-        run: pip install https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip
-
-      - name: iOS SDK Caching
-        id: SDK
-        uses: actions/cache@v4
-        env:
-          cache-name: iOS-${{ inputs.sdk_version }}-SDK
-        with:
-          path: theos/sdks/
-          key: ${{ env.cache-name }}
-          restore-keys: ${{ env.cache-name }}
-
-      - name: Download iOS SDK (If Not Cached)
-        if: steps.SDK.outputs.cache-hit != 'true'
+      - name: Setup Theos
         run: |
           mkdir -p theos/sdks
-          git clone --depth=1 https://github.com/theos/sdks.git theos/sdks
+          if [ ! -d "theos/.git" ]; then
+            git clone --depth=1 https://github.com/theos/theos.git theos
+          else
+            echo "Theos already exists, skipping clone."
+          fi
+
+      - name: Download iOS SDK
+        run: |
+          mkdir -p theos/sdks
           cd theos/sdks
           SDK_FILE=iPhoneOS${{ inputs.sdk_version }}.sdk
           if [ ! -d "$SDK_FILE" ]; then
@@ -118,7 +104,8 @@ jobs:
           mkdir -p main/packages
           wget "$IPA_URL" --no-verbose -O main/packages/com.atebits.Tweetie2.ipa
           unzip -q main/packages/com.atebits.Tweetie2.ipa -d main/tmp
-          X_VERSION=$(grep -A 1 '<key>CFBundleShortVersionString</key>' main/tmp/Payload/Twitter.app/Info.plist | grep '<string>' | awk -F'[><]' '{print $3}')
+          X_VERSION=$(grep -A 1 '<key>CFBundleShortVersionString</key>' main/tmp/Payload/Twitter.app/Info.plist |
+            grep '<string>' | awk -F'[><]' '{print $3}')
           echo "X_VERSION=${X_VERSION}" >> "$GITHUB_ENV"
           echo "$X_VERSION"
         env:
@@ -127,21 +114,18 @@ jobs:
       - name: Build Package
         run: |
           cd ${{ github.workspace }}/main
-          sed -i '' "s/^TARGET.*$/TARGET := iphone:clang:${{ env.SDK_VERSION }}:${{ inputs.target_version }}/" Makefile
+          sed -i '' "s/^TARGET.*$/TARGET := iphone:clang:${{ inputs.sdk_version }}:${{ inputs.target_version }}/" Makefile
           ./build.sh --${{ inputs.deploy_format }}
         env:
           THEOS: ${{ github.workspace }}/theos
 
-      - name: Rename IPA to include version
+      - name: Rename IPA
         if: inputs.deploy_format == 'sideloaded' || inputs.deploy_format == 'trollstore'
         run: |
-          mv "main/packages/$(ls -t main/packages | head -n1)" "main/packages/BHTwitter-${{ inputs.deploy_format }}_${{ env.BHTWITTER_VERSION }}_${{ env.X_VERSION }}.${IPA_EXT}"
+          mv "main/packages/$(ls -t main/packages | head -n1)" \
+             "main/packages/BHTwitter-${{ inputs.deploy_format }}_${{ env.BHTWITTER_VERSION }}_${{ env.X_VERSION }}.${IPA_EXT}"
         env:
           IPA_EXT: ${{ inputs.deploy_format == 'trollstore' && 'tipa' || 'ipa' }}
-
-      - name: Pass package name
-        id: package_name
-        run: echo "package=$(ls -t main/packages | head -n1)" >> "$GITHUB_OUTPUT"
 
       - name: Upload Artifact
         if: ${{ inputs.upload_artifact }}
