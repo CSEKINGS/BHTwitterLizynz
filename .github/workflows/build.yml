@@ -55,7 +55,7 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout Main
+      - name: Checkout Main Repository
         uses: actions/checkout@v4
         with:
           path: main
@@ -66,8 +66,7 @@ jobs:
         run: brew install make dpkg ldid
 
       - name: Add GNU Make to PATH
-        run: |
-          echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
+        run: echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
 
       - name: Download Theos
         uses: actions/checkout@v4
@@ -77,7 +76,7 @@ jobs:
           path: theos
           submodules: recursive
 
-      - name: Install cyan
+      - name: Install Cyan
         if: inputs.deploy_format == 'sideloaded' || inputs.deploy_format == 'trollstore'
         run: pip install https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip
 
@@ -91,15 +90,19 @@ jobs:
           key: ${{ env.cache-name }}
           restore-keys: ${{ env.cache-name }}
 
-      - name: Download iOS SDK
+      - name: Download iOS SDK (If Not Cached)
         if: steps.SDK.outputs.cache-hit != 'true'
         run: |
-          # Only download the specific SDK version
-          git clone -n --depth=1 --filter=tree:0 https://github.com/theos/sdks/
-          cd sdks
-          git sparse-checkout set --no-cone iPhoneOS${{ inputs.sdk_version }}.sdk
-          git checkout
-          mv ./*.sdk "${THEOS}/sdks"
+          mkdir -p theos/sdks
+          git clone --depth=1 https://github.com/theos/sdks.git theos/sdks
+          cd theos/sdks
+          SDK_FILE=iPhoneOS${{ inputs.sdk_version }}.sdk
+          if [ ! -d "$SDK_FILE" ]; then
+            echo "SDK version not found, using latest available"
+            SDK_FILE=$(ls -d iPhoneOS*.sdk | tail -n1)
+          fi
+          echo "Using SDK: $SDK_FILE"
+          echo "SDK_VERSION=$SDK_FILE" >> "$GITHUB_ENV"
         env:
           THEOS: ${{ github.workspace }}/theos
 
@@ -112,12 +115,10 @@ jobs:
       - name: Prepare X iPA
         if: inputs.deploy_format == 'sideloaded' || inputs.deploy_format == 'trollstore'
         run: |
-          mkdir -p main/packages  # Ensure the directory exists
+          mkdir -p main/packages
           wget "$IPA_URL" --no-verbose -O main/packages/com.atebits.Tweetie2.ipa
           unzip -q main/packages/com.atebits.Tweetie2.ipa -d main/tmp
-          # Get the version number of the X app and store it
-          X_VERSION=$(grep -A 1 '<key>CFBundleShortVersionString</key>' main/tmp/Payload/Twitter.app/Info.plist |
-            grep '<string>' | awk -F'[><]' '{print $3}')
+          X_VERSION=$(grep -A 1 '<key>CFBundleShortVersionString</key>' main/tmp/Payload/Twitter.app/Info.plist | grep '<string>' | awk -F'[><]' '{print $3}')
           echo "X_VERSION=${X_VERSION}" >> "$GITHUB_ENV"
           echo "$X_VERSION"
         env:
@@ -126,23 +127,21 @@ jobs:
       - name: Build Package
         run: |
           cd ${{ github.workspace }}/main
-          sed -i '' "s/^TARGET.*$/TARGET := iphone:clang:${{ inputs.sdk_version }}:${{ inputs.target_version }}/" Makefile
+          sed -i '' "s/^TARGET.*$/TARGET := iphone:clang:${{ env.SDK_VERSION }}:${{ inputs.target_version }}/" Makefile
           ./build.sh --${{ inputs.deploy_format }}
         env:
           THEOS: ${{ github.workspace }}/theos
 
-      - name: Rename IPA to include IPA version
+      - name: Rename IPA to include version
         if: inputs.deploy_format == 'sideloaded' || inputs.deploy_format == 'trollstore'
         run: |
-          mv "main/packages/$(ls -t main/packages | head -n1)" \
-             "main/packages/BHTwitter-${{ inputs.deploy_format }}_${{ env.BHTWITTER_VERSION }}_${{ env.X_VERSION }}.${IPA_EXT}"
+          mv "main/packages/$(ls -t main/packages | head -n1)" "main/packages/BHTwitter-${{ inputs.deploy_format }}_${{ env.BHTWITTER_VERSION }}_${{ env.X_VERSION }}.${IPA_EXT}"
         env:
           IPA_EXT: ${{ inputs.deploy_format == 'trollstore' && 'tipa' || 'ipa' }}
 
       - name: Pass package name
         id: package_name
-        run: |
-          echo "package=$(ls -t main/packages | head -n1)" >> "$GITHUB_OUTPUT"
+        run: echo "package=$(ls -t main/packages | head -n1)" >> "$GITHUB_OUTPUT"
 
       - name: Upload Artifact
         if: ${{ inputs.upload_artifact }}
