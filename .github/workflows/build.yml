@@ -19,7 +19,7 @@ on:
         type: string
       deploy_format:
         description: "Deployment format"
-        default: sideloaded
+        default: rootfull
         required: true
         type: choice
         options:
@@ -82,19 +82,27 @@ jobs:
         run: |
           mkdir -p theos/sdks
           cd theos/sdks
-          SDK_FILE=iPhoneOS${{ inputs.sdk_version }}.sdk
-          if [ ! -d "$SDK_FILE" ]; then
-            echo "SDK version not found, downloading latest available"
+          REQUESTED_SDK="iPhoneOS${{ inputs.sdk_version }}.sdk"
+          if [ ! -d "$REQUESTED_SDK" ]; then
+            echo "Requested SDK $REQUESTED_SDK not found."
+            echo "Attempting to download SDK for version ${{ inputs.sdk_version }}"
             git clone -n --depth=1 --filter=tree:0 https://github.com/theos/sdks.git tmp_sdk
             cd tmp_sdk
-            git sparse-checkout set --no-cone iPhoneOS${{ inputs.sdk_version }}.sdk
-            git checkout
-            mv iPhoneOS${{ inputs.sdk_version }}.sdk ../
+            git sparse-checkout init --cone
+            git sparse-checkout set "$REQUESTED_SDK" || true
+            git checkout || true
             cd ..
+            if [ -d "tmp_sdk/$REQUESTED_SDK" ]; then
+              mv tmp_sdk/"$REQUESTED_SDK" .
+            else
+              echo "Requested SDK not available. Using latest available SDK."
+              SDK_FILE=$(ls -d iPhoneOS*.sdk | sort -V | tail -n1)
+              REQUESTED_SDK="$SDK_FILE"
+            fi
             rm -rf tmp_sdk
           fi
-          echo "Using SDK: $SDK_FILE"
-          echo "SDK_VERSION=$SDK_FILE" >> "$GITHUB_ENV"
+          echo "Using SDK: $REQUESTED_SDK"
+          echo "SDK_VERSION=$REQUESTED_SDK" >> "$GITHUB_ENV"
         env:
           THEOS: ${{ github.workspace }}/theos
 
@@ -120,6 +128,8 @@ jobs:
       - name: Build Package
         run: |
           cd ${{ github.workspace }}/main
+          # Set the SDKROOT to the downloaded SDK directory
+          export SDKROOT=${THEOS}/sdks/${SDK_VERSION}
           sed -i '' "s/^TARGET.*$/TARGET := iphone:clang:${{ inputs.sdk_version }}:${{ inputs.target_version }}/" Makefile
           ./build.sh --${{ inputs.deploy_format }}
         env:
