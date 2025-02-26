@@ -2,7 +2,8 @@ ARCHS = arm64
 TARGET = iphone:clang:15.0
 INSTALL_TARGET_PROCESSES = Twitter
 
-export SYSROOT = $(THEOS)/sdks/iPhoneOS15.0.sdk
+# Use the environment variable SDK_VERSION (set by the workflow) to set the SYSROOT.
+export SYSROOT = $(THEOS)/sdks/$(SDK_VERSION)
 
 include $(THEOS)/makefiles/common.mk
 
