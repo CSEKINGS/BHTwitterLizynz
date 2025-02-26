@@ -78,6 +78,11 @@ jobs:
           fi
           mkdir -p theos/sdks
 
+      - name: Update Theos
+        run: |
+          cd theos
+          ./bin/update-theos
+
       - name: Ensure iOS SDK Exists
         run: |
           mkdir -p theos/sdks
@@ -128,7 +133,7 @@ jobs:
       - name: Build Package
         run: |
           cd ${{ github.workspace }}/main
-          # Set the SDKROOT to the downloaded SDK directory
+          # Set SDKROOT to the downloaded SDK directory
           export SDKROOT=${THEOS}/sdks/${SDK_VERSION}
           sed -i '' "s/^TARGET.*$/TARGET := iphone:clang:${{ inputs.sdk_version }}:${{ inputs.target_version }}/" Makefile
           ./build.sh --${{ inputs.deploy_format }}
