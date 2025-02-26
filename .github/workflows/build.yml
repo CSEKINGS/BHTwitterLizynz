@@ -19,7 +19,7 @@ on:
         type: string
       deploy_format:
         description: "Deployment format"
-        default: rootfull
+        default: sideloaded
         required: true
         type: choice
         options:
@@ -78,14 +78,20 @@ jobs:
           fi
           mkdir -p theos/sdks
 
-      - name: Download iOS SDK
+      - name: Ensure iOS SDK Exists
         run: |
           mkdir -p theos/sdks
           cd theos/sdks
           SDK_FILE=iPhoneOS${{ inputs.sdk_version }}.sdk
           if [ ! -d "$SDK_FILE" ]; then
-            echo "SDK version not found, using latest available"
-            SDK_FILE=$(ls -d iPhoneOS*.sdk | tail -n1)
+            echo "SDK version not found, downloading latest available"
+            git clone -n --depth=1 --filter=tree:0 https://github.com/theos/sdks.git tmp_sdk
+            cd tmp_sdk
+            git sparse-checkout set --no-cone iPhoneOS${{ inputs.sdk_version }}.sdk
+            git checkout
+            mv iPhoneOS${{ inputs.sdk_version }}.sdk ../
+            cd ..
+            rm -rf tmp_sdk
           fi
           echo "Using SDK: $SDK_FILE"
           echo "SDK_VERSION=$SDK_FILE" >> "$GITHUB_ENV"
