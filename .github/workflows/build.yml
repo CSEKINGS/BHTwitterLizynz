@@ -150,12 +150,19 @@ jobs:
         env:
           IPA_EXT: ${{ inputs.deploy_format == 'trollstore' && 'tipa' || 'ipa' }}
 
+      - name: Pass package name
+        id: package_name
+        run: |
+          PACKAGE=$(ls -t main/packages | head -n1)
+          echo "package=${PACKAGE}" >> "$GITHUB_OUTPUT"
+          echo "Found package: ${PACKAGE}"
+
       - name: Upload Artifact
         if: ${{ inputs.upload_artifact }}
         uses: actions/upload-artifact@v4
         with:
           name: BHTwitter_${{ env.BHTWITTER_VERSION }}
-          path: ${{ github.workspace }}/main/packages/${{ steps.package_name.outputs.package }}
+          path: main/packages/${{ steps.package_name.outputs.package }}
           if-no-files-found: error
 
       - name: Create Draft Release
