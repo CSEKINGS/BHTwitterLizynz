@@ -79,6 +79,8 @@ jobs:
           mkdir -p theos/sdks
 
       - name: Update Theos
+        env:
+          THEOS: ${{ github.workspace }}/theos
         run: |
           cd theos
           ./bin/update-theos
