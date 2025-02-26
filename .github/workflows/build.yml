@@ -113,7 +113,7 @@ jobs:
         if: inputs.deploy_format == 'sideloaded' || inputs.deploy_format == 'trollstore'
         run: |
           wget "$IPA_URL" --no-verbose -O main/packages/com.atebits.Tweetie2.ipa
-          unzip -q main/packages/com.atebits.Tweetie2.ipa -d main/tmp
+          unzip -q main/packages/com.atebits.Tweetie2-10.82-Decrypted.ipa -d main/tmp
           # Get the version number of the X app and store it
           X_VERSION=$(grep -A 1 '<key>CFBundleShortVersionString</key>' main/tmp/Payload/Twitter.app/Info.plist |
             grep '<string>' | awk -F'[><]' '{print $3}')
